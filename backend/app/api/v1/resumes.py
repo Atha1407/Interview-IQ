@@ -10,7 +10,9 @@ from app.db.database import get_db
 from app.models.user import User
 from app.schemas.resume import ResumeResponse
 from app.services.resume_service import (
-    create_resume
+    create_resume,
+    delete_resume,
+    get_user_resumes,
 )
 
 UPLOAD_DIR = Path("uploads/resumes")
