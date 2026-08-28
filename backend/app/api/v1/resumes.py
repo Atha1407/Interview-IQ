@@ -1,5 +1,6 @@
 from pathlib import Path
 from uuid import uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
@@ -8,7 +9,9 @@ from app.api.dependencies import get_current_user
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.resume import ResumeResponse
-from app.services.resume_service import create_resume, get_user_resumes
+from app.services.resume_service import (
+    create_resume
+)
 
 UPLOAD_DIR = Path("uploads/resumes")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,19 +32,6 @@ def list_resumes(
         user_id=current_user.id,
     )
 
-@router.post("/", response_model=ResumeResponse)
-def add_resume(
-    file_name: str,
-    file_path: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    return create_resume(
-        db=db,
-        user_id=current_user.id,
-        file_name=file_name,
-        file_path=file_path,
-    )
 
 @router.post("/upload", response_model=ResumeResponse)
 def upload_resume(
@@ -75,3 +65,23 @@ def upload_resume(
         file_name=file.filename,
         file_path=str(file_path),
     )
+
+@router.delete("/{resume_id}")
+def remove_resume(
+    resume_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    deleted = delete_resume(
+        db=db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Resume not found",
+        )
+
+    return {"message": "Resume deleted successfully"}
