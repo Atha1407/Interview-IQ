@@ -12,3 +12,7 @@ app.include_router(
     auth_router,
     prefix="/api/v1",
 )
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
