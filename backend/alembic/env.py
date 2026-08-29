@@ -4,9 +4,10 @@ from app.db.base import Base
 from app.models.user import User
 from app.models.resume import Resume
 from app.models import User
+from app.models.interview_session import InterviewSession
+from app.models.interview_question import InterviewQuestion
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from app.models.interview_session import InterviewSession
 
 from alembic import context
 from app.core.config import settings

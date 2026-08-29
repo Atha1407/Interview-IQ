@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
+from app.models.interview_session import InterviewDifficulty
 from app.models.interview_session import InterviewSession, InterviewStatus, InterviewType
 from app.models.resume import Resume
 
@@ -12,6 +12,9 @@ def create_interview_session(
     user_id: UUID,
     resume_id: UUID,
     interview_type: InterviewType,
+    difficulty: InterviewDifficulty,
+    question_count: int,
+    topics: list[str],
 ) -> InterviewSession | None:
     resume = db.scalar(
         select(Resume).where(
@@ -28,6 +31,9 @@ def create_interview_session(
         resume_id=resume_id,
         interview_type=interview_type,
         status=InterviewStatus.CREATED,
+        difficulty=difficulty,
+        question_count=question_count,
+        topics=topics,
     )
 
     db.add(session)
@@ -78,3 +84,31 @@ def delete_interview_session(
     db.commit()
 
     return True
+
+def start_interview_session(
+    db: Session,
+    user_id: UUID,
+    session_id: UUID,
+):
+    session = (
+        db.query(InterviewSession)
+        .filter(
+            InterviewSession.id == session_id,
+            InterviewSession.user_id == user_id,
+        )
+        .first()
+    )
+
+    if session is None:
+        return None
+
+    if session.status == InterviewStatus.COMPLETED:
+        return "completed"
+
+    session.status = InterviewStatus.IN_PROGRESS
+    session.current_question = 1
+
+    db.commit()
+    db.refresh(session)
+
+    return session

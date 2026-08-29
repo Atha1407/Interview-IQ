@@ -1,10 +1,11 @@
+from app.models.interview_question import InterviewQuestion
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
-
-from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column
-
+from sqlalchemy import ARRAY
+from sqlalchemy import DateTime, Enum as SQLEnum, ForeignKey, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.models.enums import InterviewDifficulty
 from app.db.base import Base
 
 
@@ -45,6 +46,27 @@ class InterviewSession(Base):
         nullable=False,
     )
 
+    difficulty: Mapped[InterviewDifficulty] = mapped_column(
+    SQLEnum(InterviewDifficulty),
+    nullable=False,
+    )
+
+    question_count: Mapped[int] = mapped_column(
+    Integer,
+    nullable=False,
+    )
+
+    current_question: Mapped[int] = mapped_column(
+    Integer,
+    default=1,
+    nullable=False,
+    )
+
+    topics: Mapped[list[str]] = mapped_column(
+    ARRAY(String),
+    nullable=False,
+    )
+
     status: Mapped[InterviewStatus] = mapped_column(
         SQLEnum(InterviewStatus),
         default=InterviewStatus.CREATED,
@@ -62,4 +84,9 @@ class InterviewSession(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    questions: Mapped[list["InterviewQuestion"]] = relationship(
+    back_populates="session",
+    cascade="all, delete-orphan",
     )
