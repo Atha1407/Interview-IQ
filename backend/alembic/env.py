@@ -9,6 +9,10 @@ from app.models.interview_question import InterviewQuestion
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
+
+from app.models.answer_evaluation import AnswerEvaluation
+from app.models.interview_evaluation import InterviewEvaluation
+
 from alembic import context
 from app.core.config import settings
 

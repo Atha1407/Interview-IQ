@@ -8,6 +8,16 @@ class InterviewResultQuestion(BaseModel):
     question_text: str
     answer: str | None
 
+    technical_accuracy: int | None = None
+    relevance: int | None = None
+    completeness: int | None = None
+    communication: int | None = None
+    overall_score: int | None = None
+
+    strengths: str | None = None
+    weaknesses: str | None = None
+    feedback: str | None = None
+
 
 class InterviewResultResponse(BaseModel):
     session_id: UUID
@@ -16,4 +26,10 @@ class InterviewResultResponse(BaseModel):
     difficulty: str
     question_count: int
     answered_count: int
+
+    overall_score: int | None = None
+    strengths: str | None = None
+    weaknesses: str | None = None
+    feedback: str | None = None
+
     questions: list[InterviewResultQuestion]

@@ -1,3 +1,4 @@
+from app.api.v1 import interview_sessions
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -31,6 +32,9 @@ from app.models.interview_session import InterviewStatus
 from app.services.interview_answer_service import submit_answer
 from app.schemas.interview_result import InterviewResultResponse
 from app.services.interview_result_service import get_interview_result
+from app.schemas.interview_evaluation import InterviewEvaluationResponse
+from app.services.interview_evaluation_service import evaluate_interview
+
 
 router = APIRouter(
     prefix="/interview-sessions",
@@ -263,11 +267,17 @@ def submit_interview_answer(
 
     if session.current_question >= session.question_count:
         session.status = InterviewStatus.COMPLETED
+        db.commit()
+        db.refresh(session)
+
+        evaluate_interview(
+            db=db,
+            session=session,
+        )
     else:
         session.current_question += 1
-
-    db.commit()
-    db.refresh(session)
+        db.commit()
+        db.refresh(session)
 
     next_question = None
 
@@ -311,3 +321,43 @@ def get_result(
         )
 
     return result
+
+@router.post(
+    "/{session_id}/evaluate",
+    response_model=InterviewEvaluationResponse,
+)
+def evaluate_interview_session(
+    session_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = get_interview_session(
+        db=db,
+        user_id=current_user.id,
+        session_id=session_id,
+    )
+
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Interview session not found",
+        )
+
+    if session.status != InterviewStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail="Interview session is not completed",
+        )
+
+    evaluation = evaluate_interview(
+        db=db,
+        session=session,
+    )
+
+    if evaluation is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No answers available for evaluation",
+        )
+
+    return evaluation
