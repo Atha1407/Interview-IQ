@@ -7,6 +7,7 @@ from app.models.interview_question import InterviewQuestion
 from app.models.interview_session import InterviewSession
 from app.models.answer_evaluation import AnswerEvaluation
 from app.models.interview_evaluation import InterviewEvaluation
+from app.services.readiness_service import analyze_readiness
 
 
 def get_interview_result(
@@ -112,6 +113,12 @@ def get_interview_result(
         .first()
     )
 
+    # Analyze interview readiness
+    readiness = analyze_readiness(
+        db=db,
+        session_id=session_id,
+    )
+
     return {
         "session_id": session.id,
         "status": session.status.value,
@@ -136,6 +143,8 @@ def get_interview_result(
             interview_evaluation.feedback
             if interview_evaluation else None
         ),
+
+        "readiness": readiness,
 
         "questions": result_questions,
     }

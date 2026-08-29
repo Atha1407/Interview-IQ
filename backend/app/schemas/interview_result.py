@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.readiness import ReadinessAnalysis
+
 
 class InterviewResultQuestion(BaseModel):
     question_id: UUID
@@ -31,5 +33,7 @@ class InterviewResultResponse(BaseModel):
     strengths: str | None = None
     weaknesses: str | None = None
     feedback: str | None = None
+
+    readiness: ReadinessAnalysis | None = None
 
     questions: list[InterviewResultQuestion]
