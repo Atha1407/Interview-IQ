@@ -1,3 +1,4 @@
+from app.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
@@ -5,7 +6,7 @@ from app.db.database import get_db
 from app.schemas.auth import UserLogin, UserRegister, UserResponse
 from app.services.auth_service import login_user, register_user
 from app.models.user import User
-
+from app.core.config import settings
 
 router = APIRouter(
     prefix="/auth",
@@ -59,9 +60,9 @@ def login(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=30 * 60,
+        secure=settings.environment == "production",
+        samesite="none" if settings.environment == "production" else "lax",
+        max_age=settings.jwt_expire_minutes * 60,
     )
 
     return {"message": "Login successful"}

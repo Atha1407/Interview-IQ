@@ -1,6 +1,4 @@
-from pathlib import Path
-from uuid import uuid4
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.orm import Session
@@ -9,14 +7,13 @@ from app.api.dependencies import get_current_user
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.resume import ResumeResponse
+from app.services.cloudinary_service import upload_resume
 from app.services.resume_service import (
     create_resume,
     delete_resume,
     get_user_resumes,
 )
 
-UPLOAD_DIR = Path("uploads/resumes")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(
     prefix="/resumes",
@@ -36,7 +33,7 @@ def list_resumes(
 
 
 @router.post("/upload", response_model=ResumeResponse)
-def upload_resume(
+def upload_resume_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -47,26 +44,34 @@ def upload_resume(
             detail="Filename is required",
         )
 
-    extension = Path(file.filename).suffix.lower()
+    extension = file.filename.rsplit(".", 1)[-1].lower()
 
-    if extension not in {".pdf", ".docx"}:
+    if extension not in {"pdf", "docx"}:
         raise HTTPException(
             status_code=400,
             detail="Only PDF and DOCX files are allowed",
         )
 
-    stored_filename = f"{uuid4()}{extension}"
-    file_path = UPLOAD_DIR / stored_filename
+    stored_filename = f"{uuid4()}.{extension}"
 
-    with file_path.open("wb") as buffer:
-        buffer.write(file.file.read())
+    try:
+        file_url = upload_resume(
+            file=file.file,
+            filename=stored_filename,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to upload resume",
+        )
 
     return create_resume(
         db=db,
         user_id=current_user.id,
         file_name=file.filename,
-        file_path=str(file_path),
+        file_path=file_url,
     )
+
 
 @router.delete("/{resume_id}")
 def remove_resume(

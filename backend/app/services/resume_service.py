@@ -1,9 +1,10 @@
 from uuid import UUID
-from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.resume import Resume
+from app.services.cloudinary_service import delete_resume as delete_cloudinary_resume
 
 
 def get_user_resumes(
@@ -17,6 +18,7 @@ def get_user_resumes(
             .order_by(Resume.created_at.desc())
         )
     )
+
 
 def create_resume(
     db: Session,
@@ -36,6 +38,7 @@ def create_resume(
 
     return resume
 
+
 def delete_resume(
     db: Session,
     user_id: UUID,
@@ -52,10 +55,12 @@ def delete_resume(
     if resume is None:
         return False
 
-    file_path = Path(resume.file_path)
-
-    if file_path.exists():
-        file_path.unlink()
+    try:
+        delete_cloudinary_resume(resume.file_path)
+    except Exception:
+        # We don't want a storage failure to leave
+        # the database transaction half-completed.
+        raise
 
     db.delete(resume)
     db.commit()
