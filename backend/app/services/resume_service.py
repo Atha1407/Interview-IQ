@@ -25,11 +25,13 @@ def create_resume(
     user_id: UUID,
     file_name: str,
     file_path: str,
+    extracted_topics: list[str],
 ) -> Resume:
     resume = Resume(
         user_id=user_id,
         file_name=file_name,
         file_path=file_path,
+        extracted_topics=extracted_topics,
     )
 
     db.add(resume)

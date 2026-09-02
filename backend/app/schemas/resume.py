@@ -8,5 +8,6 @@ class ResumeResponse(BaseModel):
     id: UUID
     file_name: str
     file_path: str
+    extracted_topics: list[str]
     created_at: datetime
     updated_at: datetime
