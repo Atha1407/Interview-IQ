@@ -17,19 +17,6 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 
-const TOPIC_PRESETS = [
-  'Python',
-  'FastAPI',
-  'Data Structures & Algorithms',
-  'System Design',
-  'SQL & Databases',
-  'REST APIs',
-  'React & Frontend',
-  'Cloud & Microservices',
-  'Object Oriented Programming',
-  'Behavioral & Leadership',
-]
-
 export const InterviewSetupPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -67,17 +54,56 @@ export const InterviewSetupPage = () => {
     fetchResumes()
   }, [fetchResumes])
 
-  // Update topics when a resume is selected or loaded
+  // Update topics when a resume is selected or loaded (for technical interview)
   useEffect(() => {
-    const resume = resumes.find((r) => r.id === selectedResumeId)
-    if (resume) {
-      if (resume.extracted_topics && resume.extracted_topics.length > 0) {
-        setTopics(resume.extracted_topics.slice(0, 10)) // Max 10 topics
+    if (interviewType === 'technical') {
+      const resume = resumes.find((r) => r.id === selectedResumeId)
+      if (resume) {
+        if (resume.extracted_topics && resume.extracted_topics.length > 0) {
+          setTopics(resume.extracted_topics.slice(0, 10)) // Max 10 topics
+        } else {
+          setTopics(['Python', 'Data Structures & Algorithms'])
+        }
       } else {
         setTopics(['Python', 'Data Structures & Algorithms'])
       }
     }
-  }, [selectedResumeId, resumes])
+  }, [selectedResumeId, resumes, interviewType])
+
+  // Reset topics to empty array when switching to behavioral or hr
+useEffect(() => {
+  if (interviewType === 'behavioral') {
+    setTopics(['Teamwork', 'Communication'])
+  } else if (interviewType === 'hr') {
+    setTopics(['Self Introduction', 'Career Goals'])
+  }
+}, [interviewType])
+
+  const getPresets = () => {
+    if (interviewType === 'behavioral') {
+      return [
+        'Teamwork', 'Leadership', 'Communication', 'Conflict Resolution',
+        'Problem Solving', 'Adaptability', 'Time Management', 'Decision Making'
+      ]
+    }
+    if (interviewType === 'hr') {
+      return [
+        'Self Introduction', 'Strengths & Weaknesses', 'Career Goals', 'Motivation',
+        'Company Fit', 'Work Experience', 'Situational Questions', 'Career Plans'
+      ]
+    }
+    const resume = resumes.find((r) => r.id === selectedResumeId)
+    if (resume && resume.extracted_topics && resume.extracted_topics.length > 0) {
+      return resume.extracted_topics
+    }
+    return [
+      'Python', 'FastAPI', 'Data Structures & Algorithms', 'System Design',
+      'SQL & Databases', 'REST APIs', 'React & Frontend', 'Cloud & Microservices',
+      'Object Oriented Programming', 'Behavioral & Leadership'
+    ]
+  }
+
+  const currentPresets = getPresets()
 
   const toggleTopic = (topic) => {
     if (topics.includes(topic)) {
@@ -387,7 +413,7 @@ export const InterviewSetupPage = () => {
                   Preset Suggestions:
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {TOPIC_PRESETS.map((preset) => {
+                  {currentPresets.map((preset) => {
                     const isSelected = topics.includes(preset)
                     return (
                       <button
