@@ -70,14 +70,20 @@ export const InterviewSetupPage = () => {
     }
   }, [selectedResumeId, resumes, interviewType])
 
-  // Reset topics to empty array when switching to behavioral or hr
-useEffect(() => {
-  if (interviewType === 'behavioral') {
-    setTopics(['Teamwork', 'Communication'])
-  } else if (interviewType === 'hr') {
-    setTopics(['Self Introduction', 'Career Goals'])
-  }
-}, [interviewType])
+  // Set topics to predefined list when switching to behavioral or hr
+  useEffect(() => {
+    if (interviewType === 'behavioral') {
+      setTopics([
+        'Teamwork', 'Leadership', 'Communication', 'Conflict Resolution',
+        'Problem Solving', 'Adaptability', 'Time Management', 'Decision Making'
+      ])
+    } else if (interviewType === 'hr') {
+      setTopics([
+        'Self Introduction', 'Strengths & Weaknesses', 'Career Goals', 'Motivation',
+        'Company Fit', 'Work Experience', 'Situational Questions', 'Career Plans'
+      ])
+    }
+  }, [interviewType])
 
   const getPresets = () => {
     if (interviewType === 'behavioral') {
