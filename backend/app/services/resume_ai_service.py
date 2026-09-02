@@ -45,7 +45,7 @@ Return between 5 and 15 relevant topics.
 """
 
     interaction = client.interactions.create(
-        model="gemini-3.5-flash-lite",
+        model="gemini-3.6-flash",
         input=prompt,
         response_format={
             "type": "text",
