@@ -16,7 +16,10 @@ print("FRONTEND URL:", settings.frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://interview-iq-ashen.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
