@@ -61,6 +61,7 @@ export const Navbar = () => {
               <nav className="flex items-center gap-8 text-xs font-medium text-[#8A95A5]" aria-label="Main navigation">
                 <Link to="/" className="hover:text-[#F3F1EA] transition-colors">Home</Link>
                 <a href="#how-it-works" className="hover:text-[#F3F1EA] transition-colors">How It Works</a>
+                <Link to="/login" className="hover:text-[#F3F1EA] transition-colors">Dashboard</Link>
               </nav>
             )}
           </div>
@@ -155,6 +156,7 @@ export const Navbar = () => {
             <div className="space-y-3 pt-1">
               <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block text-xs text-[#8A95A5]">Home</Link>
               <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block text-xs text-[#8A95A5]">How It Works</a>
+              <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="block text-xs text-[#8A95A5]">Dashboard</Link>
               <div className="pt-3 flex items-center gap-6 border-t border-white/10">
                 <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="text-xs font-medium text-[#8A95A5] hover:text-[#F3F1EA] transition-colors">
                   Sign In
