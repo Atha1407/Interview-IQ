@@ -67,6 +67,18 @@ export const InterviewSetupPage = () => {
     fetchResumes()
   }, [fetchResumes])
 
+  // Update topics when a resume is selected or loaded
+  useEffect(() => {
+    const resume = resumes.find((r) => r.id === selectedResumeId)
+    if (resume) {
+      if (resume.extracted_topics && resume.extracted_topics.length > 0) {
+        setTopics(resume.extracted_topics.slice(0, 10)) // Max 10 topics
+      } else {
+        setTopics(['Python', 'Data Structures & Algorithms'])
+      }
+    }
+  }, [selectedResumeId, resumes])
+
   const toggleTopic = (topic) => {
     if (topics.includes(topic)) {
       if (topics.length === 1) {
