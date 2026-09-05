@@ -17,16 +17,24 @@ class GeneratedQuestion(BaseModel):
 class GeneratedQuestionsResponse(BaseModel):
     questions: list[GeneratedQuestion] = Field(description="The list of generated questions.")
 
+STOP_WORDS = {
+    "a", "an", "the", "in", "on", "at", "to", "for", "of", "with",
+    "by", "from", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "can", "could", "should",
+    "would", "will", "shall", "what", "which", "who", "whom", "this",
+    "that", "these", "those", "how", "why", "when", "where", "explain",
+    "describe", "difference", "between", "concept", "you", "your", "give",
+}
+
 def is_duplicate(q1: str, q2: str) -> bool:
-    """Basic check to see if two questions are nearly identical."""
-    s1 = set(q1.lower().split())
-    s2 = set(q2.lower().split())
-    if not s1 or not s2:
+    """Check if two questions are genuinely duplicate by comparing meaningful content words."""
+    w1 = {w.strip("?,.:;!") for w in q1.lower().split() if w.strip("?,.:;!") not in STOP_WORDS and len(w) > 2}
+    w2 = {w.strip("?,.:;!") for w in q2.lower().split() if w.strip("?,.:;!") not in STOP_WORDS and len(w) > 2}
+    if not w1 or not w2:
         return False
-    # Jaccard similarity
-    intersection = len(s1.intersection(s2))
-    union = len(s1.union(s2))
-    return (intersection / union) > 0.8  # 80% word overlap is considered duplicate
+    intersection = len(w1.intersection(w2))
+    union = len(w1.union(w2))
+    return (intersection / union) > 0.8
 
 from sqlalchemy.orm import Session
 from app.models.interview_question import InterviewQuestion
@@ -47,7 +55,7 @@ def generate_questions(session: InterviewSession) -> list[dict]:
                     InterviewQuestion.session_id != session.id
                 )
                 .order_by(InterviewQuestion.id.desc())
-                .limit(40)
+                .limit(15)
                 .all()
             )
             previous_questions = [q[0] for q in prev_qs]
@@ -80,7 +88,7 @@ The difficulty level of the questions should be: {session.difficulty}.
 - Return the exact topic (from the list above) that each question addresses.
 """
 
-    max_retries = 3
+    max_retries = 2
     
     for attempt in range(max_retries):
         try:

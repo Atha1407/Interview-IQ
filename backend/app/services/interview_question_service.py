@@ -63,11 +63,12 @@ def generate_and_save_questions(
         )
 
         db.add(question)
-        questions.append(question)
 
     db.commit()
 
-    for question in questions:
-        db.refresh(question)
-
-    return questions
+    return (
+        db.query(InterviewQuestion)
+        .filter(InterviewQuestion.session_id == session.id)
+        .order_by(InterviewQuestion.question_order)
+        .all()
+    )

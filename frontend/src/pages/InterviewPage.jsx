@@ -1,38 +1,83 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { interviewService } from '../services/interviewService'
 import { getErrorMessage } from '../services/api'
 import Button from '../components/ui/Button'
 import Alert from '../components/ui/Alert'
 import { Skeleton } from '../components/ui/Skeleton'
+import { VoiceInterviewPanel } from '../components/interview/VoiceInterviewPanel'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis'
 import {
   Brain,
   Send,
   Sparkles,
   Loader2,
   CornerDownLeft,
+  MessageSquare,
+  Mic,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 
 export const InterviewPage = () => {
   const { id: sessionId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const textareaRef = useRef(null)
 
-  const [session, setSession] = useState(null)
-  const [questions, setQuestions] = useState([])
+  const initialSession = location.state?.initialSession
+  const initialQuestions = location.state?.initialQuestions
+
+  const [session, setSession] = useState(initialSession || null)
+  const [questions, setQuestions] = useState(initialQuestions || [])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [interviewMode, setInterviewMode] = useState('text') // 'text' | 'voice'
   const [answerText, setAnswerText] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(
+    !initialSession || !initialQuestions || initialQuestions.length === 0
+  )
   const [submitting, setSubmitting] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [error, setError] = useState('')
 
+  // Speech Recognition hook
+  const {
+    isSupported: isSpeechSupported,
+    status: speechStatus,
+    transcript,
+    interimTranscript,
+    errorMessage: speechError,
+    permissionDenied,
+    startListening,
+    stopListening,
+    resetTranscript,
+    setTranscript,
+  } = useSpeechRecognition()
+
+  // Text to Speech hook
+  const {
+    isSupported: isTTSSupported,
+    isSpeaking,
+    speak: speakQuestion,
+    cancel: cancelTTS,
+  } = useSpeechSynthesis()
+
   const loadInterview = useCallback(async () => {
+    // If already initialized with valid session and questions from setup navigation, skip redundant fetches
+    if (initialSession && initialQuestions && initialQuestions.length > 0) {
+      return
+    }
+
     try {
       setLoading(true)
       setError('')
 
-      const sessionData = await interviewService.getSession(sessionId)
+      const [sessionData, questionsData] = await Promise.all([
+        interviewService.getSession(sessionId),
+        interviewService.getSessionQuestions(sessionId),
+      ])
+
       setSession(sessionData)
 
       if (sessionData.status === 'completed') {
@@ -40,17 +85,17 @@ export const InterviewPage = () => {
         return
       }
 
-      let questionsData = await interviewService.getSessionQuestions(sessionId)
+      let finalQuestions = questionsData
 
-      if (!questionsData || questionsData.length === 0) {
-        questionsData = await interviewService.generateQuestions(sessionId)
+      if (!finalQuestions || finalQuestions.length === 0) {
+        finalQuestions = await interviewService.generateQuestions(sessionId)
       }
 
       if (sessionData.status === 'created') {
         await interviewService.startSession(sessionId)
       }
 
-      setQuestions(questionsData)
+      setQuestions(finalQuestions)
 
       const targetIndex = Math.max(0, (sessionData.current_question || 1) - 1)
       setCurrentQuestionIndex(targetIndex)
@@ -59,15 +104,59 @@ export const InterviewPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [sessionId, navigate])
+  }, [sessionId, navigate, initialSession, initialQuestions])
 
   useEffect(() => {
     loadInterview()
   }, [loadInterview])
 
+  // Cancel any ongoing speech synthesis or recognition when unmounting
+  useEffect(() => {
+    return () => {
+      cancelTTS()
+      stopListening()
+    }
+  }, [cancelTTS, stopListening])
+
+  // Cancel TTS whenever question changes
+  useEffect(() => {
+    cancelTTS()
+  }, [currentQuestionIndex, cancelTTS])
+
+  // Seamless mode switching with text/transcript preservation
+  const handleModeChange = (newMode) => {
+    if (newMode === interviewMode) return
+
+    if (newMode === 'voice') {
+      // Transfer any typed text to voice transcript if transcript is empty
+      if (answerText.trim() && !transcript.trim()) {
+        setTranscript(answerText.trim())
+      }
+    } else {
+      // Transfer transcript to text input if text is empty
+      if (transcript.trim() && !answerText.trim()) {
+        setAnswerText(transcript.trim())
+      }
+      stopListening()
+      cancelTTS()
+    }
+
+    setInterviewMode(newMode)
+  }
+
   const handleSubmitAnswer = async (e) => {
     if (e) e.preventDefault()
-    if (!answerText.trim() || submitting || evaluating) return
+    if (submitting || evaluating) return
+
+    // Stop active audio recognition or playback before submitting
+    stopListening()
+    cancelTTS()
+
+    const textToSubmit = (
+      interviewMode === 'voice' ? transcript : answerText
+    ).trim()
+
+    if (!textToSubmit) return
 
     const currentQuestion = questions[currentQuestionIndex]
     if (!currentQuestion) return
@@ -79,7 +168,7 @@ export const InterviewPage = () => {
       const response = await interviewService.submitAnswer(
         sessionId,
         currentQuestion.id,
-        answerText.trim()
+        textToSubmit
       )
 
       if (response.status === 'completed') {
@@ -89,8 +178,9 @@ export const InterviewPage = () => {
         }, 1200)
       } else {
         setAnswerText('')
+        resetTranscript()
         setCurrentQuestionIndex((prev) => prev + 1)
-        if (textareaRef.current) {
+        if (interviewMode === 'text' && textareaRef.current) {
           textareaRef.current.focus()
         }
       }
@@ -163,7 +253,7 @@ export const InterviewPage = () => {
       {/* Top Header & Progress */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#7C8FB2]">
               Live Simulation
             </span>
@@ -173,6 +263,34 @@ export const InterviewPage = () => {
             <span className="px-2.5 py-0.5 rounded-full bg-[#0a0f10] border border-white/[0.06] text-xs text-[#8A95A5] capitalize">
               {session?.difficulty}
             </span>
+
+            {/* Mode Switcher Tabs */}
+            <div className="flex items-center p-0.5 rounded-lg bg-[#0e1416] border border-white/[0.08] ml-0 sm:ml-2">
+              <button
+                type="button"
+                onClick={() => handleModeChange('text')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  interviewMode === 'text'
+                    ? 'bg-[#7C8FB2] text-[#050708] font-bold shadow-sm'
+                    : 'text-[#8A95A5] hover:text-[#F3F1EA]'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Text</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange('voice')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  interviewMode === 'voice'
+                    ? 'bg-[#7C8FB2] text-[#050708] font-bold shadow-sm'
+                    : 'text-[#8A95A5] hover:text-[#F3F1EA]'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Voice</span>
+              </button>
+            </div>
           </div>
 
           <span className="text-sm font-semibold text-[#8A95A5]">
@@ -217,15 +335,49 @@ export const InterviewPage = () => {
 
       {/* Active Question Box */}
       <div className="p-6 sm:p-8 rounded-2xl bg-[#0a0f10] border border-white/[0.06] space-y-4 shadow-xl">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 text-xs font-semibold text-[#7C8FB2]">
             <Sparkles className="w-4 h-4 text-[#7C8FB2]" />
             <span>Topic: <strong className="text-[#F3F1EA] font-mono">{activeQuestion?.topic || 'General'}</strong></span>
           </div>
 
-          <span className="px-2.5 py-0.5 rounded-md bg-[#151a1e] border border-white/10 text-xs text-[#8A95A5] uppercase font-mono">
-            {activeQuestion?.difficulty}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Quick Listen Button in Question Header */}
+            {isTTSSupported && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSpeaking) {
+                    cancelTTS()
+                  } else {
+                    speakQuestion(activeQuestion?.question_text)
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer ${
+                  isSpeaking
+                    ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                    : 'bg-[#151a1e] border-white/10 text-[#8A95A5] hover:text-[#F3F1EA]'
+                }`}
+                title={isSpeaking ? 'Stop reading' : 'Read question aloud'}
+              >
+                {isSpeaking ? (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5" />
+                    <span>Stop</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5 text-[#7C8FB2]" />
+                    <span>Listen</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <span className="px-2.5 py-0.5 rounded-md bg-[#151a1e] border border-white/10 text-xs text-[#8A95A5] uppercase font-mono">
+              {activeQuestion?.difficulty}
+            </span>
+          </div>
         </div>
 
         <h2 className="text-xl sm:text-2xl font-bold text-[#F3F1EA] leading-relaxed">
@@ -233,50 +385,75 @@ export const InterviewPage = () => {
         </h2>
       </div>
 
-      {/* Candidate Response Area */}
-      <div className="p-6 sm:p-8 rounded-2xl bg-[#0a0f10] border border-white/[0.06] space-y-5 shadow-xl">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-mono font-bold uppercase tracking-widest text-[#7C8FB2]">
-            Your Response
-          </label>
-          <div className="text-xs text-[#8A95A5] font-mono">
-            {wordCount} words &bull; {answerText.length} chars
+      {/* Response Section: Voice Mode vs Text Mode */}
+      {interviewMode === 'voice' ? (
+        <VoiceInterviewPanel
+          questionText={activeQuestion?.question_text}
+          transcript={transcript}
+          interimTranscript={interimTranscript}
+          status={speechStatus}
+          isSpeechSupported={isSpeechSupported}
+          errorMessage={speechError}
+          permissionDenied={permissionDenied}
+          onStartListening={startListening}
+          onStopListening={stopListening}
+          onResetTranscript={resetTranscript}
+          onTranscriptChange={setTranscript}
+          onSubmitAnswer={handleSubmitAnswer}
+          submitting={submitting}
+          isFinalQuestion={currentNumber >= totalQuestions}
+          onSwitchToTextMode={() => handleModeChange('text')}
+          isTTSSupported={isTTSSupported}
+          isSpeaking={isSpeaking}
+          onSpeakQuestion={speakQuestion}
+          onCancelTTS={cancelTTS}
+        />
+      ) : (
+        /* Text Response Area */
+        <div className="p-6 sm:p-8 rounded-2xl bg-[#0a0f10] border border-white/[0.06] space-y-5 shadow-xl">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-mono font-bold uppercase tracking-widest text-[#7C8FB2]">
+              Your Response
+            </label>
+            <div className="text-xs text-[#8A95A5] font-mono">
+              {wordCount} words &bull; {answerText.length} chars
+            </div>
+          </div>
+
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              rows={8}
+              value={answerText}
+              onChange={(e) => setAnswerText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your structured answer here. Include relevant principles, trade-offs, architecture decisions, or code logic where appropriate..."
+              className="w-full p-4 bg-[#050708] border border-white/[0.06] rounded-xl text-sm text-[#F3F1EA] placeholder-[#6B7280] focus:outline-none focus:border-[#7C8FB2]/60 focus:ring-1 focus:ring-[#7C8FB2]/60 transition-all font-mono leading-relaxed resize-y"
+              autoFocus
+            />
+          </div>
+
+          {/* Footer controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+            <div className="text-xs text-[#8A95A5] flex items-center gap-1.5 font-mono">
+              <CornerDownLeft className="w-3.5 h-3.5" />
+              <span>Tip: Press <strong>Ctrl + Enter</strong> to submit your answer</span>
+            </div>
+
+            <Button
+              variant="mint"
+              size="lg"
+              loading={submitting}
+              disabled={!answerText.trim() || submitting}
+              onClick={handleSubmitAnswer}
+              icon={Send}
+              className="w-full sm:w-auto px-8 font-bold"
+            >
+              {currentNumber >= totalQuestions ? 'Submit & Finalize Interview' : 'Submit Answer'}
+            </Button>
           </div>
         </div>
-
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            rows={8}
-            value={answerText}
-            onChange={(e) => setAnswerText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your structured answer here. Include relevant principles, trade-offs, architecture decisions, or code logic where appropriate..."
-            className="w-full p-4 bg-[#050708] border border-white/[0.06] rounded-xl text-sm text-[#F3F1EA] placeholder-[#6B7280] focus:outline-none focus:border-[#7C8FB2]/60 focus:ring-1 focus:ring-[#7C8FB2]/60 transition-all font-mono leading-relaxed resize-y"
-            autoFocus
-          />
-        </div>
-
-        {/* Footer controls */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-          <div className="text-xs text-[#8A95A5] flex items-center gap-1.5 font-mono">
-            <CornerDownLeft className="w-3.5 h-3.5" />
-            <span>Tip: Press <strong>Ctrl + Enter</strong> to submit your answer</span>
-          </div>
-
-          <Button
-            variant="mint"
-            size="lg"
-            loading={submitting}
-            disabled={!answerText.trim() || submitting}
-            onClick={handleSubmitAnswer}
-            icon={Send}
-            className="w-full sm:w-auto px-8 font-bold"
-          >
-            {currentNumber >= totalQuestions ? 'Submit & Finalize Interview' : 'Submit Answer'}
-          </Button>
-        </div>
-      </div>
+      )}
 
     </div>
   )

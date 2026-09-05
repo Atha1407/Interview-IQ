@@ -172,9 +172,14 @@ export const InterviewSetupPage = () => {
         question_count: Number(questionCount),
         topics,
       })
-      await interviewService.generateQuestions(session.id)
+      const questions = await interviewService.generateQuestions(session.id)
       await interviewService.startSession(session.id)
-      navigate(`/interview/${session.id}`)
+      navigate(`/interview/${session.id}`, {
+        state: {
+          initialSession: { ...session, status: 'in_progress', current_question: 1 },
+          initialQuestions: questions,
+        },
+      })
     } catch (err) {
       setError(getErrorMessage(err))
       setStarting(false)

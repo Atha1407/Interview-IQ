@@ -27,6 +27,7 @@ from app.schemas.interview_answer import (
     InterviewAnswerResponse,
     InterviewAnswerSubmitResponse,
 )
+from app.models.interview_answer import InterviewAnswer
 from app.models.interview_question import InterviewQuestion
 from app.models.interview_session import InterviewStatus
 from app.services.interview_answer_service import submit_answer
@@ -257,6 +258,20 @@ def submit_interview_answer(
         raise HTTPException(
             status_code=400,
             detail="This is not the current interview question",
+        )
+
+    existing_answer = (
+        db.query(InterviewAnswer)
+        .filter(
+            InterviewAnswer.question_id == question_id,
+        )
+        .first()
+    )
+
+    if existing_answer is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="An answer has already been submitted for this question",
         )
 
     answer = submit_answer(
