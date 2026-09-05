@@ -8,50 +8,7 @@ from app.models.interview_answer import InterviewAnswer
 from app.models.interview_question import InterviewQuestion
 from app.models.answer_evaluation import AnswerEvaluation
 
-from app.services.ai_evaluator import evaluate_answer_with_ai
-
-
-def evaluate_answer(
-    db: Session,
-    answer: InterviewAnswer,
-    question: InterviewQuestion,
-) -> AnswerEvaluation:
-    """
-    Evaluates an interview answer using Gemini AI.
-    """
-
-    ai_result = evaluate_answer_with_ai(
-        question=question.question_text,
-        answer=answer.answer_text,
-    )
-
-    overall_score = round(
-        (
-            ai_result.technical_accuracy
-            + ai_result.relevance
-            + ai_result.completeness
-            + ai_result.communication
-        )
-        / 4
-    )
-
-    evaluation = AnswerEvaluation(
-        answer_id=answer.id,
-        technical_accuracy=ai_result.technical_accuracy,
-        relevance=ai_result.relevance,
-        completeness=ai_result.completeness,
-        communication=ai_result.communication,
-        overall_score=overall_score,
-        strengths=ai_result.strengths,
-        weaknesses=ai_result.weaknesses,
-        feedback=ai_result.feedback,
-    )
-
-    db.add(evaluation)
-    db.commit()
-    db.refresh(evaluation)
-
-    return evaluation
+from app.services.ai_evaluator import evaluate_interview_with_ai
 
 
 def evaluate_interview(
@@ -59,8 +16,7 @@ def evaluate_interview(
     session: InterviewSession,
 ):
     """
-    Evaluates all answers in an interview and creates
-    the overall interview evaluation.
+    Evaluates all answers in an interview using a single Gemini request.
     """
 
     answers = (
@@ -78,16 +34,26 @@ def evaluate_interview(
     if not answers:
         return None
 
+    # Get all questions in one query instead of querying inside the loop.
+    questions = (
+        db.query(InterviewQuestion)
+        .filter(
+            InterviewQuestion.session_id == session.id,
+        )
+        .all()
+    )
+
+    questions_by_id = {
+        question.id: question
+        for question in questions
+    }
+
     answer_evaluations = []
 
+    answers_for_ai = []
+
     for answer in answers:
-        question = (
-            db.query(InterviewQuestion)
-            .filter(
-                InterviewQuestion.id == answer.question_id,
-            )
-            .first()
-        )
+        question = questions_by_id.get(answer.question_id)
 
         if question is None:
             continue
@@ -104,13 +70,64 @@ def evaluate_interview(
             answer_evaluations.append(existing_evaluation)
             continue
 
-        evaluation = evaluate_answer(
-            db=db,
-            answer=answer,
-            question=question,
+        answers_for_ai.append(
+            {
+                "answer_id": str(answer.id),
+                "question": question.question_text,
+                "answer": answer.answer_text,
+            }
         )
 
-        answer_evaluations.append(evaluation)
+    # Only call Gemini if there are answers that still need evaluation.
+    if answers_for_ai:
+        batch_result = evaluate_interview_with_ai(
+            questions_and_answers=answers_for_ai,
+        )
+
+        evaluations_by_answer_id = {
+            item.answer_id: item
+            for item in batch_result.evaluations
+        }
+
+        for answer_data in answers_for_ai:
+            answer_id = answer_data["answer_id"]
+
+            ai_result = evaluations_by_answer_id.get(answer_id)
+
+            if ai_result is None:
+                continue
+
+            overall_score = round(
+                (
+                    ai_result.technical_accuracy
+                    + ai_result.relevance
+                    + ai_result.completeness
+                    + ai_result.communication
+                )
+                / 4
+            )
+
+            evaluation = AnswerEvaluation(
+                answer_id=UUID(answer_id),
+                technical_accuracy=ai_result.technical_accuracy,
+                relevance=ai_result.relevance,
+                completeness=ai_result.completeness,
+                communication=ai_result.communication,
+                overall_score=overall_score,
+                strengths=ai_result.strengths,
+                weaknesses=ai_result.weaknesses,
+                feedback=ai_result.feedback,
+            )
+
+            db.add(evaluation)
+            answer_evaluations.append(evaluation)
+
+        db.commit()
+
+        # Refresh newly-created evaluations so their database fields
+        # are available to the rest of the application.
+        for evaluation in answer_evaluations:
+            db.refresh(evaluation)
 
     if not answer_evaluations:
         return None

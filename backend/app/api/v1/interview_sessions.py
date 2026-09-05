@@ -269,11 +269,6 @@ def submit_interview_answer(
         session.status = InterviewStatus.COMPLETED
         db.commit()
         db.refresh(session)
-
-        evaluate_interview(
-            db=db,
-            session=session,
-        )
     else:
         session.current_question += 1
         db.commit()
@@ -361,3 +356,7 @@ def evaluate_interview_session(
         )
 
     return evaluation
+
+
+
+

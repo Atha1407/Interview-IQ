@@ -10,7 +10,7 @@ client = genai.Client(
 print("Sending request...")
 
 interaction = client.interactions.create(
-    model="gemini-3.5-flash-lite",
+    model="gemini-3.6-flash",
     input="Give me 3 programming languages.",
     response_format={
         "type": "text",
